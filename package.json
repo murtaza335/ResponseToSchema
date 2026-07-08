@@ -1,0 +1,38 @@
+{
+  "name": "api-schema-architect",
+  "displayName": "API Schema Architect",
+  "description": "Fire real HTTP requests from a Webview panel and instantly generate TypeScript interfaces and Zod schemas from the JSON response.",
+  "version": "0.1.0",
+  "publisher": "local-dev",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:api-schema-architect.openDashboard"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "api-schema-architect.openDashboard",
+        "title": "API Schema Architect: Open Dashboard"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.125.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}
