@@ -12,6 +12,8 @@ const extPath = path.join(repoRoot, 'dist', 'extension.js');
 const wsPath = fs.mkdtempSync(path.join(os.tmpdir(), 'r2s-ws-'));
 fs.writeFileSync(path.join(wsPath, '.env'), 'API_KEY=sekret\nexport TOKEN="tok123"\n');
 
+// The page drops messages posted before its script is running, as the real webview does.
+let pageReady = false;
 const posted = []; let onMsg; const commands = {}; const shown = []; let clipboard = '';
 const memento = () => { const m = new Map(); return { get: (k, d) => m.has(k) ? m.get(k) : d, update: async (k, v) => { m.set(k, v); } }; };
 const Uri = { file: (p) => ({ fsPath: p, path: p, scheme: 'file' }), joinPath: (u, ...p) => Uri.file(path.join(u.fsPath, ...p)) };
@@ -49,8 +51,8 @@ const vscode = {
     showTextDocument: async (doc) => { shown.push(['doc', doc.content]); return doc.__editor || {}; },
     createWebviewPanel: () => ({
       webview: { cspSource: 'vscode-resource:', asWebviewUri: (u) => u.fsPath, html: '', options: {},
-        onDidReceiveMessage: (fn) => { onMsg = fn; return { dispose() {} }; },
-        postMessage: async (m) => { posted.push(m); } },
+        onDidReceiveMessage: (fn) => { onMsg = (m) => { if (m.type === 'ready') pageReady = true; return fn(m); }; return { dispose() {} }; },
+        postMessage: async (m) => { if (pageReady) posted.push(m); } },
       onDidDispose: () => ({ dispose() {} }), onDidChangeViewState: () => ({ dispose() {} }), reveal() {}, visible: true,
     }),
   },
@@ -87,6 +89,17 @@ server.listen(0, async () => {
     const ctx = { subscriptions: [], workspaceState: memento(), globalState: memento(), extensionUri: Uri.file(repoRoot), extension: { id: 'murtaza335.response-to-schema' } };
     require(extPath).activate(ctx);
     assert.deepEqual(Object.keys(commands).sort(), ['responseToSchema.clearHistory', 'responseToSchema.generateFromFile', 'responseToSchema.generateFromSelection', 'responseToSchema.importCurl', 'responseToSchema.openPanel', 'responseToSchema.pasteJsonAsCode']);
+    // cold start: Import cURL creates the panel, and the request must survive until the webview is ready
+    clipboard = "curl -X PUT 'http://x.dev/a' -u ada:pw --json '{\"r\":1}'";
+    await commands['responseToSchema.importCurl']();
+    assert.equal(posted.filter((m) => m.type === 'loadRequest').length, 0, 'nothing can be delivered before the page is ready');
+    onMsg({ type: 'ready' });
+    const cold = await wait(() => last('loadRequest'));
+    assert.equal(cold.request.method, 'PUT');
+    assert.deepEqual(cold.request.auth, { type: 'basic', username: 'ada', password: 'pw' });
+    console.log('ok cold-start Import cURL is delivered once the webview is ready');
+    posted.length = 0;
+
     commands['responseToSchema.openPanel']();
     onMsg({ type: 'ready' });
     const env = await wait(() => last('env'));
@@ -139,8 +152,17 @@ server.listen(0, async () => {
 
     // connection refused
     posted.length = 0;
-    onMsg({ type: 'send', request: { ...request, url: 'http://127.0.0.1:1/' }, options: opts });
-    console.log('ok refused:', (await wait(() => last('error'))).message);
+    onMsg({ type: 'send', request: { ...request, url: 'http://127.0.0.1:59999/' }, options: opts });
+    const refused = (await wait(() => last('error'))).message;
+    assert.match(refused, /Connection refused by 127\.0\.0\.1:59999/);
+    console.log('ok refused:', refused);
+
+    // ports on the fetch "bad ports" list get an explanation instead of "fetch failed"
+    posted.length = 0;
+    onMsg({ type: 'send', request: { ...request, url: 'http://127.0.0.1:6000/' }, options: opts });
+    const badPort = (await wait(() => last('error'))).message;
+    assert.match(badPort, /Port 6000 is on the fetch standard's blocked-ports list/);
+    console.log('ok bad port:', badPort.slice(0, 60) + '…');
 
     // curl import
     posted.length = 0;

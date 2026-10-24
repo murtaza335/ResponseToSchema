@@ -49,7 +49,7 @@ button:hover { background: var(--vscode-button-secondaryHoverBackground); }
 button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 button.primary:hover { background: var(--vscode-button-hoverBackground); }
 button.danger { background: var(--vscode-inputValidation-errorBorder, #be1100); color: #fff; }
-button.ghost { background: transparent; color: var(--vscode-textLink-foreground); padding-left: 0; }
+button.ghost { background: transparent; color: var(--vscode-textLink-foreground); padding-left: 4px; padding-right: 4px; }
 button.ghost:hover { text-decoration: underline; background: transparent; }
 button.icon { background: transparent; padding: 0 8px; font-size: 16px; color: var(--muted); }
 button.icon:hover { color: var(--vscode-errorForeground); background: transparent; }

@@ -33,6 +33,9 @@ export class SchemaPanel {
   private hasValue = false;
   private lastResult: GenerateResult | undefined;
   private inflight: AbortController | undefined;
+  /** False until the webview script has loaded; earlier postMessage calls are silently lost. */
+  private webviewReady = false;
+  private pendingRequest: RequestSpec | undefined;
 
   static show(context: vscode.ExtensionContext, history: RequestHistory): SchemaPanel {
     if (SchemaPanel.current) {
@@ -67,6 +70,10 @@ export class SchemaPanel {
 
   /** Loads a request into the form, e.g. from the "Import cURL" command. */
   loadRequest(request: RequestSpec): void {
+    if (!this.webviewReady) {
+      this.pendingRequest = request;
+      return;
+    }
     void this.panel.webview.postMessage({ type: 'loadRequest', request });
   }
 
@@ -84,6 +91,11 @@ export class SchemaPanel {
       case 'ready': {
         const history = this.history.list();
         this.post({ type: 'init', options: this.options, history: summarize(history), request: history[0]?.request });
+        this.webviewReady = true;
+        if (this.pendingRequest) {
+          this.loadRequest(this.pendingRequest);
+          this.pendingRequest = undefined;
+        }
         await this.postEnv();
         break;
       }

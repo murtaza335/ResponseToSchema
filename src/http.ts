@@ -116,8 +116,19 @@ function describeNetworkError(error: unknown, url: string): Error {
   const host = safeHost(url);
   if (code === 'ENOTFOUND') return new Error(`Could not resolve host ${host}.`);
   if (code === 'ECONNREFUSED') return new Error(`Connection refused by ${host}. Is the server running?`);
+  if (cause?.message === 'bad port') {
+    return new Error(`Port ${safePort(url)} is on the fetch standard's blocked-ports list (it includes 1, 22, 25, 6000 and 6665-6669, among others), so requests to it are refused. Run the server on a different port.`);
+  }
   if (code && /CERT|SELF_SIGNED|UNABLE_TO_VERIFY/.test(code)) return new Error(`TLS certificate error from ${host} (${code}).`);
   return new Error(cause?.message ? `${error.message}: ${cause.message}` : error.message);
+}
+
+function safePort(url: string): string {
+  try {
+    return new URL(url).port || '(default)';
+  } catch {
+    return '(unknown)';
+  }
 }
 
 function safeHost(url: string): string {
