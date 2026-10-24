@@ -16,8 +16,29 @@ const posted = []; let onMsg; const commands = {}; const shown = []; let clipboa
 const memento = () => { const m = new Map(); return { get: (k, d) => m.has(k) ? m.get(k) : d, update: async (k, v) => { m.set(k, v); } }; };
 const Uri = { file: (p) => ({ fsPath: p, path: p, scheme: 'file' }), joinPath: (u, ...p) => Uri.file(path.join(u.fsPath, ...p)) };
 const config = { get: (k, d) => d };
+class Position { constructor(line, character) { this.line = line; this.character = character; } }
+
+// Minimal editable text buffer standing in for a TextEditor.
+function fakeEditor(text, cursor) {
+  const doc = { isClosed: false, getText: () => text, get lineCount() { return text.split('\n').length; }, lineAt: (i) => { const l = text.split('\n')[i]; return { range: { end: new Position(i, l.length) } }; } };
+  const editor = { document: doc, viewColumn: 1, selections: [{ start: cursor }] };
+  editor.edit = async (cb) => {
+    cb({ insert: (pos, t) => apply(pos, t), replace: (sel, t) => apply(sel.start, t) });
+    return true;
+  };
+  function apply(pos, t) {
+    const lines = text.split('\n');
+    const offset = lines.slice(0, pos.line).reduce((n, l) => n + l.length + 1, 0) + pos.character;
+    text = text.slice(0, offset) + t + text.slice(offset);
+    if (editor.selections[0].start.line >= pos.line && t.includes('\n') && pos.character === 0) editor.selections[0].start = new Position(editor.selections[0].start.line + t.split('\n').length - 1, editor.selections[0].start.character);
+  }
+  doc.__editor = editor;
+  editor.text = () => text;
+  return editor;
+}
+
 const vscode = {
-  Uri, ViewColumn: { Active: -1, Beside: -2 },
+  Position, Uri, ViewColumn: { Active: -1, Beside: -2 },
   commands: { registerCommand: (id, fn) => { commands[id] = fn; return { dispose() {} }; }, executeCommand: async () => {} },
   window: {
     activeTextEditor: undefined,
@@ -25,7 +46,7 @@ const vscode = {
     registerWebviewPanelSerializer: () => ({ dispose() {} }),
     showErrorMessage: (m) => shown.push(['err', m]), showWarningMessage: (m) => shown.push(['warn', m]), showInformationMessage: (m) => shown.push(['info', m]),
     showInputBox: async (o) => o.value,
-    showTextDocument: async (doc) => { shown.push(['doc', doc.content]); return {}; },
+    showTextDocument: async (doc) => { shown.push(['doc', doc.content]); return doc.__editor || {}; },
     createWebviewPanel: () => ({
       webview: { cspSource: 'vscode-resource:', asWebviewUri: (u) => u.fsPath, html: '', options: {},
         onDidReceiveMessage: (fn) => { onMsg = fn; return { dispose() {} }; },
@@ -48,6 +69,7 @@ Module._load = function (req, ...rest) { return req === 'vscode' ? vscode : orig
 
 const server = http.createServer((req, res) => {
   if (req.url.startsWith('/html')) { res.setHeader('content-type', 'text/html'); return res.end('<h1>hi</h1>'); }
+  if (req.url.startsWith('/bom')) { res.setHeader('content-type', 'application/json'); return res.end('\uFEFF{"a":1}'); }
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({ seen: { key: req.headers['x-api-key'], auth: req.headers['authorization'], path: req.url },
     data: [{ id: 1, email: 'a@b.io' }, { id: 2, email: 'c@d.io', nick: 'x' }] }));
@@ -133,6 +155,59 @@ server.listen(0, async () => {
     const g3 = await wait(() => last('generated'));
     assert.equal(g3.rootName, 'Root'); assert.doesNotMatch(g3.code, /fetchRoot/);
     console.log('ok clipboard JSON');
+
+    // history must not keep secrets from the URL or body
+    await wait(() => true);
+    posted.length = 0;
+    onMsg({ type: 'send', request: { ...request, method: 'POST', url: `${base}/v1/login?api_key=ZZZ&page=1`, body: '{"user":"ada","password":"hunter2"}' }, options: opts });
+    await wait(() => last('generated'));
+    const stored = JSON.stringify(ctx.workspaceState.get('responseToSchema.history', []));
+    assert.ok(!stored.includes('ZZZ') && !stored.includes('hunter2') && !stored.includes('literal-secret'), 'secret leaked into history: ' + stored);
+    assert.ok(stored.includes('page=1') && stored.includes('ada'));
+    console.log('ok history keeps no secrets from URL/body');
+
+    // a response with a UTF-8 BOM is still JSON
+    posted.length = 0;
+    onMsg({ type: 'send', request: { ...request, url: `${base}/bom` }, options: opts });
+    const bom = await wait(() => last('generated'));
+    assert.match(bom.code, /a: number;/);
+    console.log('ok BOM-prefixed JSON');
+
+    // a throwing handler must reach the UI instead of hanging it
+    posted.length = 0;
+    const realRead = vscode.env.clipboard.readText;
+    vscode.env.clipboard.readText = async () => { throw new Error('clipboard exploded'); };
+    onMsg({ type: 'useClipboard', options: opts });
+    assert.equal((await wait(() => last('error'))).message, 'clipboard exploded');
+    vscode.env.clipboard.readText = realRead;
+    console.log('ok handler failure surfaces as an error message');
+
+    // insert at cursor: import goes with the other imports, body at the cursor
+    clipboard = '{"id":1}';
+    onMsg({ type: 'useClipboard', options: { ...opts, rootName: 'Thing', includeFetcher: false } });
+    await wait(() => last('generated') && last('generated').rootName === 'Thing');
+    let ed = fakeEditor("import a from 'a';\nimport {\n  b,\n} from 'b';\n\nfunction f() {\n  \n}\n", new Position(6, 2));
+    vscode.window.activeTextEditor = ed;
+    onMsg({ type: 'action', action: 'insert' });
+    await wait(() => ed.text().includes('ThingSchema'));
+    let lines = ed.text().split('\n');
+    assert.equal(lines[4], "import { z } from 'zod';", ed.text());
+    assert.ok(lines.indexOf('function f() {') > 4 && ed.text().indexOf('export interface Thing') > ed.text().indexOf('function f() {'), ed.text());
+    assert.equal(ed.text().match(/from 'zod'/g).length, 1);
+    // already importing zod: no second import
+    ed = fakeEditor("import { z } from 'zod';\n", new Position(1, 0));
+    vscode.window.activeTextEditor = ed;
+    onMsg({ type: 'action', action: 'insert' });
+    await wait(() => ed.text().includes('ThingSchema'));
+    assert.equal(ed.text().match(/from 'zod'/g).length, 1, ed.text());
+    // file that ends right after an import without a newline
+    ed = fakeEditor("import a from 'a';", new Position(0, 0));
+    vscode.window.activeTextEditor = ed;
+    onMsg({ type: 'action', action: 'insert' });
+    await wait(() => ed.text().includes('ThingSchema'));
+    assert.match(ed.text(), /import a from 'a';\nimport \{ z \} from 'zod';\n$/, ed.text());
+    vscode.window.activeTextEditor = undefined;
+    console.log('ok insert at cursor places the zod import with the other imports');
 
     // editor command: generate from file
     shown.length = 0;

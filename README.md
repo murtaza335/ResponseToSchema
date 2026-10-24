@@ -99,13 +99,15 @@ Every release is tested by running the generated schemas against their source JS
 
 ## Privacy
 
-Requests are sent from the VS Code extension host directly to the URL you enter. There is no telemetry and no account, and there are no third-party servers. Request history lives in VS Code workspace storage; auth tokens, passwords and sensitive headers (`Authorization`, `Cookie`, `*token*`, `*api-key*`, …) are blanked unless they are `{{VARIABLE}}` placeholders.
+Requests are sent from the VS Code extension host directly to the URL you enter. There is no telemetry and no account, and there are no third-party servers. Request history lives in VS Code workspace storage. Before a request is saved, literal secrets are blanked: auth fields, sensitive headers (`Authorization`, `Cookie`, `*token*`, `*api-key*`, …), URL query parameters and credentials with those names, and JSON or form-encoded body fields with those names. `{{VARIABLE}}` placeholders are kept. Bodies in other formats (XML, plain text) can't be inspected and are stored as typed, so use `{{VARIABLE}}` for secrets there or set `responseToSchema.history.maxEntries` to `0`.
 
 ## Known limitations
 
 - Requests use Node's `fetch`, so VS Code's `http.proxy` setting and self-signed certificates may not be honored on older VS Code versions.
 - `multipart/form-data` bodies and file uploads aren't supported yet.
 - Discriminated unions (e.g. events keyed by `type`) are merged into one object with optional fields.
+- Objects used as dictionaries (keys that are ids or dates) become one field per key instead of a `Record`.
+- A cURL `-F` (multipart) or `-d @file` is not followed; use a JSON body instead.
 
 ## Contributing
 

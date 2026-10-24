@@ -205,7 +205,7 @@
           "type": "number",
           "default": 50,
           "minimum": 0,
-          "description": "Requests remembered per workspace (0 disables history). Literal secrets in auth and sensitive headers are never stored."
+          "description": "Requests remembered per workspace (0 disables history). Secrets in auth fields, sensitive headers, query parameters and JSON/form body fields are blanked before saving."
         }
       }
     }

@@ -175,12 +175,14 @@ export function tokenize(input: string): string[] {
       i += 2;
       while (i < src.length && src[i] !== "'") {
         if (src[i] === '\\' && i + 1 < src.length) {
-          current += unescapeAnsi(src[i + 1]);
-          i += 2;
+          const [text, consumed] = readAnsiEscape(src, i + 1);
+          current += text;
+          i += 1 + consumed;
         } else {
           current += src[i++];
         }
       }
+      if (i >= src.length) throw new Error("Unterminated $'...' string in cURL command.");
       i++;
     } else if (ch === '"') {
       inToken = true;
@@ -209,11 +211,31 @@ export function tokenize(input: string): string[] {
   return tokens;
 }
 
-function unescapeAnsi(ch: string): string {
-  switch (ch) {
-    case 'n': return '\n';
-    case 't': return '\t';
-    case 'r': return '\r';
-    default: return ch;
+const ANSI_SIMPLE: Record<string, string> = {
+  n: '\n', t: '\t', r: '\r', a: '\x07', b: '\b', f: '\f', v: '\v', e: '\x1b', E: '\x1b',
+};
+
+/**
+ * Decodes one backslash escape of a bash `$'...'` string. `at` points at the
+ * character after the backslash; returns the decoded text and how many
+ * characters were consumed. Chrome's "Copy as cURL (bash)" relies on `\xHH`
+ * and `\uHHHH` for anything that isn't printable ASCII.
+ */
+function readAnsiEscape(src: string, at: number): [string, number] {
+  const ch = src[at];
+  if (ch in ANSI_SIMPLE) return [ANSI_SIMPLE[ch], 1];
+
+  const hexLength: Record<string, number> = { x: 2, u: 4, U: 8 };
+  if (ch in hexLength) {
+    const digits = /^[0-9a-fA-F]*/.exec(src.slice(at + 1, at + 1 + hexLength[ch]))![0];
+    if (digits.length === 0) return [ch, 1];
+    const code = parseInt(digits, 16);
+    return [code <= 0x10ffff ? String.fromCodePoint(code) : '', 1 + digits.length];
   }
+
+  const octal = /^[0-7]{1,3}/.exec(src.slice(at, at + 3));
+  if (octal) return [String.fromCharCode(parseInt(octal[0], 8)), octal[0].length];
+
+  // `\\`, `\'`, `\"`, `\?` and unknown escapes decode to the character itself.
+  return [ch, 1];
 }

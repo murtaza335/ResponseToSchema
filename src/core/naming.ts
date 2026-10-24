@@ -20,9 +20,19 @@ export function toPascalCase(input: string): string {
   return name;
 }
 
+const UNCOUNTABLE = new Set(['series', 'species', 'news', 'data', 'metadata', 'info', 'media', 'sheep', 'fish']);
+/** Plurals ending in `-ies` whose singular is `-ie`, not `-y`. */
+const IE_SINGULARS = /(movie|cookie|zombie|selfie|calorie|rookie|prairie|genie|hoodie|newbie|pixie|foodie|brownie|goalie|smoothie|bookie)s$/i;
+/** Plurals of words ending in `s` that take `-es` (`statuses`, `Buses`). */
+const ES_AFTER_S = /(alias|status|campus|virus|bonus|census|focus|genus|canvas|atlas|bias)es$|(^|[A-Z])[Bb]uses$/;
+
 export function singularize(word: string): string {
+  if (UNCOUNTABLE.has(word.toLowerCase())) return word;
+  if (IE_SINGULARS.test(word)) return word.slice(0, -1);
+  if (ES_AFTER_S.test(word)) return word.slice(0, -2);
   if (/[^aeiou]ies$/i.test(word)) return word.slice(0, -3) + 'y';
-  if (/(ss|sh|ch|x|z)es$/i.test(word)) return word.slice(0, -2);
+  if (/zzes$/i.test(word)) return word.slice(0, -3);
+  if (/(ss|sh|ch|x)es$/i.test(word)) return word.slice(0, -2);
   if (/(ss|us|is)$/i.test(word)) return word;
   if (/s$/i.test(word) && word.length > 1) return word.slice(0, -1);
   return word;

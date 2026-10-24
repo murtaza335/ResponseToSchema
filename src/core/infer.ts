@@ -43,7 +43,7 @@ export const DEFAULT_INFER_OPTIONS: InferOptions = {
 
 const FORMAT_TESTS: Array<[StringFormat, RegExp]> = [
   // Seconds and a `Z`/`±hh:mm` offset are required so both Zod 3 and Zod 4 accept the value.
-  ['datetime', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/],
+  ['datetime', /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$/],
   ['date', /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/],
   ['uuid', /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i],
   ['email', /^[A-Za-z0-9_+-]+(\.[A-Za-z0-9_+-]+)*@([A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/],
@@ -122,7 +122,7 @@ function detectFormat(values: string[]): StringFormat | undefined {
 }
 
 function passesSemanticCheck(format: StringFormat, value: string): boolean {
-  if (format === 'datetime' || format === 'date') return !Number.isNaN(Date.parse(value));
+  if (format === 'datetime' || format === 'date') return isRealCalendarDate(value);
   if (format === 'url') {
     try {
       new URL(value);
@@ -132,6 +132,16 @@ function passesSemanticCheck(format: StringFormat, value: string): boolean {
     }
   }
   return true;
+}
+
+/** `Date.parse` happily rolls 2024-02-31 over to March, whereas Zod rejects it. */
+function isRealCalendarDate(value: string): boolean {
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return day >= 1 && day <= daysInMonth;
 }
 
 /** Number of distinct members a node will render as (null counts as one). */

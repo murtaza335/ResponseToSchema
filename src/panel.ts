@@ -60,7 +60,7 @@ export class SchemaPanel {
   ) {
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icon.png');
     panel.webview.html = this.html();
-    panel.webview.onDidReceiveMessage((m: WebviewMessage) => void this.handle(m), null, this.disposables);
+    panel.webview.onDidReceiveMessage((m: WebviewMessage) => void this.safeHandle(m), null, this.disposables);
     panel.onDidDispose(() => this.dispose(), null, this.disposables);
     panel.onDidChangeViewState(() => panel.visible && void this.postEnv(), null, this.disposables);
   }
@@ -68,6 +68,15 @@ export class SchemaPanel {
   /** Loads a request into the form, e.g. from the "Import cURL" command. */
   loadRequest(request: RequestSpec): void {
     void this.panel.webview.postMessage({ type: 'loadRequest', request });
+  }
+
+  /** A throwing handler must still reset the webview, or it would stay on "Sending…". */
+  private async safeHandle(message: WebviewMessage): Promise<void> {
+    try {
+      await this.handle(message);
+    } catch (error) {
+      this.post({ type: 'error', message: errorMessage(error) });
+    }
   }
 
   private async handle(message: WebviewMessage): Promise<void> {
@@ -161,7 +170,7 @@ export class SchemaPanel {
 
   private setBody(body: string): boolean {
     try {
-      this.lastValue = JSON.parse(body);
+      this.lastValue = JSON.parse(body.replace(/^\uFEFF/, ''));
       this.hasValue = true;
       return true;
     } catch {

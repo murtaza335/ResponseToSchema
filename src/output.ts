@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { GenerateResult } from './core/generate';
 import { OutputMode } from './config';
+import { findImportInsertLine } from './core/imports';
 
 const ZOD_IMPORT = "import { z } from 'zod';";
 
@@ -28,19 +29,32 @@ export async function openInEditor(code: string): Promise<void> {
   await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.Beside, preview: false });
 }
 
-/** Inserts at the cursor, dropping the zod import if the file already has one. */
+/**
+ * Inserts at the cursor. The zod import goes with the other imports at the top
+ * of the file (and is skipped when the file already imports zod), never into
+ * the middle of code. Returns false when nothing could be inserted.
+ */
 export async function insertIntoEditor(code: string, target = vscode.window.activeTextEditor ?? lastTextEditor): Promise<boolean> {
   if (!target || target.document.isClosed) return false;
-  const existing = target.document.getText();
-  let text = code;
-  if (/from\s+['"]zod['"]/.test(existing)) {
-    text = text.replace(`${ZOD_IMPORT}\n\n`, '');
+
+  const document = target.document;
+  const hasImport = code.startsWith(`${ZOD_IMPORT}\n`);
+  const body = hasImport ? code.slice(ZOD_IMPORT.length).replace(/^\n+/, '') : code;
+  const needsImport = hasImport && !/from\s+['"]zod['"]/.test(document.getText());
+
+  const editor = await vscode.window.showTextDocument(document, target.viewColumn);
+
+  if (needsImport) {
+    const line = findImportInsertLine(document.getText().split(/\r?\n/));
+    const atEndOfFile = line >= document.lineCount;
+    const position = atEndOfFile ? document.lineAt(document.lineCount - 1).range.end : new vscode.Position(line, 0);
+    const text = atEndOfFile ? `\n${ZOD_IMPORT}\n` : `${ZOD_IMPORT}\n`;
+    if (!(await editor.edit((edit) => edit.insert(position, text)))) return false;
   }
-  const editor = await vscode.window.showTextDocument(target.document, target.viewColumn);
-  await editor.edit((edit) => {
-    for (const selection of editor.selections) edit.replace(selection, text);
+
+  return editor.edit((edit) => {
+    for (const selection of editor.selections) edit.replace(selection, body);
   });
-  return true;
 }
 
 export async function saveToFile(code: string, rootName: string): Promise<void> {

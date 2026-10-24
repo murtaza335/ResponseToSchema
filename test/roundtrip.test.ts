@@ -73,5 +73,11 @@ for (const fixture of fixtures) {
       const code = `${result.combined}\nconst sample: Root = ${json.trim()};\nconst parsed: Root = RootSchema.parse(sample);\nvoid parsed;\n`;
       assert.deepEqual(typecheck(code), [], code);
     });
+
+    test(`${fixture} [${style}] standalone zod output typechecks against the source JSON`, () => {
+      const result = generateFromJson(json, { rootName: 'Root', style, fetcher: { url: 'https://api.example.com/{{ID}}', method: 'GET' } });
+      const code = `${result.zod}\nconst sample: Root = ${json.trim()};\nconst parsed: Root = RootSchema.parse(sample);\nvoid parsed;\n`;
+      assert.deepEqual(typecheck(code), [], code);
+    });
   }
 }

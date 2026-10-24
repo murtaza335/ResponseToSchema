@@ -105,6 +105,12 @@ test('string formats follow the selected Zod version', () => {
   assert.match(v3, /mail: z\.string\(\)\.email\(\)/);
 });
 
+test('impossible calendar dates and out-of-range times stay plain strings', () => {
+  const out = zod({ a: '2024-02-31', b: '2023-02-29', c: '2024-04-31', d: '2024-05-01T24:00:00Z', e: '2024-02-31T10:00:00Z', f: '2024-05-01T08:30:00+25:00' });
+  assert.doesNotMatch(out, /iso\./);
+  assert.match(zod({ a: '2024-02-29', b: '2024-05-01T23:59:59Z' }), /a: z\.iso\.date\(\),\n\s+b: z\.iso\.datetime/);
+});
+
 test('formats are dropped when samples disagree or detection is off', () => {
   assert.match(zod([{ m: 'a@b.io' }, { m: 'nope' }]), /m: z\.string\(\)/);
   assert.match(zod({ m: 'a@b.io' }, { detectFormats: false }), /m: z\.string\(\)/);
@@ -147,6 +153,13 @@ test('naming helpers', () => {
   assert.equal(singularize('addresses'), 'address');
   assert.equal(singularize('status'), 'status');
   assert.equal(singularize('users'), 'user');
+  for (const [plural, singular] of [
+    ['movies', 'movie'], ['cookies', 'cookie'], ['calories', 'calorie'], ['news', 'news'], ['series', 'series'], ['species', 'species'],
+    ['aliases', 'alias'], ['statuses', 'status'], ['Buses', 'Bus'], ['quizzes', 'quiz'], ['boxes', 'box'], ['responses', 'response'],
+    ['databases', 'database'], ['companies', 'company'], ['analysis', 'analysis'],
+  ]) {
+    assert.equal(singularize(plural), singular, plural);
+  }
 });
 
 test('root name is derived from the URL path', () => {

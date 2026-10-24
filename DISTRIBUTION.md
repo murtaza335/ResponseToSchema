@@ -18,7 +18,7 @@
 | Channel | Why | Setup (one time) |
 |---|---|---|
 | **VS Code Marketplace** | Most VS Code installs come from here | Create the publisher `murtaza335` at https://marketplace.visualstudio.com/manage. Create an Azure DevOps PAT (Organization: *All accessible*, scope *Marketplace → Manage*). Run `npx vsce login murtaza335`. |
-| **Open VSX** | Cursor, Windsurf, VSCodium, Gitpod, Theia | Sign in at https://open-vsx.org with GitHub, link an Eclipse account and sign the Publisher Agreement. Create a token, then run `npx ovsx create-namespace murtaza335 -p <token>`. |
+| **Open VSX** | Cursor (confirmed in [Cursor's docs](https://cursor.com/docs/configuration/extensions)), VSCodium, Gitpod, Theia; Windsurf is unverified | Sign in at https://open-vsx.org with GitHub, link an Eclipse account and sign the Publisher Agreement. Create a token, then run `npx ovsx create-namespace murtaza335 -p <token>`. |
 | **GitHub Releases** | Offline/enterprise installs (`code --install-extension *.vsix`) | Automatic via `.github/workflows/release.yml` |
 
 **Automation:** add the repository secrets `VSCE_PAT` and `OVSX_PAT`, then:
@@ -27,6 +27,8 @@
 npm version patch            # bumps package.json and creates the git tag
 git push --follow-tags       # the release workflow tests, packages and publishes everywhere
 ```
+
+**Cursor caveats** (from Cursor's forum): its marketplace mirrors Open VSX on a delay, so a new version can take a while to show up in search; and an extension whose `engines.vscode` is newer than Cursor's VS Code base is hidden entirely. The `^1.85.0` floor keeps us well clear of that. Install from VSIX is the workaround for users who can't wait.
 
 ## 3. Marketplace listing optimisation
 
@@ -53,7 +55,7 @@ Search on the Marketplace weights display name, keywords and installs.
 - **Product Hunt** (Developer Tools) is optional, a week later, if the first wave gets traction.
 
 **Evergreen channels (week 2+)**
-- Open a PR adding the extension to **Zod's ecosystem page** (zod.dev → Ecosystem, sourced from the Zod repo). This is the most targeted audience there is.
+- **Zod ecosystem page:** zod.dev/ecosystem currently lists libraries ("X to Zod", form integrations, mocking, …) and has no section for editor extensions, and its contribution note asks for libraries that support Zod 4. Don't expect a listing for the extension itself. Once the engine ships as an npm package (roadmap 1.2), propose that library for the "X to Zod" section via a PR to `packages/docs/content/ecosystem.mdx` in colinhacks/zod, or start a GitHub Discussion there.
 - Open a PR to **awesome-vscode** and relevant "awesome-zod" lists.
 - Answer Stack Overflow / Reddit questions like "generate zod schema from json" and "typescript types from api response" where the tool genuinely solves the question.
 - A 60-second YouTube Short / TikTok of the GIF flow.

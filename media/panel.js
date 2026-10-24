@@ -40,11 +40,11 @@
   function h(tag, props, ...children) {
     const el = document.createElement(tag);
     for (const [key, value] of Object.entries(props || {})) {
-      if (value === undefined || value === null || value === false) continue;
+      if (value === undefined || value === null) continue;
       if (key.startsWith('on')) el.addEventListener(key.slice(2).toLowerCase(), value);
       else if (key === 'className') el.className = value;
       else if (key in el && key !== 'list') /** @type {any} */ (el)[key] = value;
-      else el.setAttribute(key, value === true ? '' : String(value));
+      else if (value !== false) el.setAttribute(key, value === true ? '' : String(value));
     }
     for (const child of children) {
       if (child === null || child === undefined || child === false) continue;
@@ -100,7 +100,7 @@
             h('option', { value: 'basic' }, 'Basic auth'))
         ),
         h('div', { id: 'authFields', className: 'stack' }),
-        h('p', { className: 'muted small' }, 'Tip: use {{VARIABLE}} placeholders resolved from your .env file. Literal secrets are never written to request history.')
+        h('p', { className: 'muted small' }, 'Tip: use {{VARIABLE}} placeholders resolved from your .env file. Auth values, sensitive headers and fields named like token, password or api_key are blanked in request history.')
       ),
       h('div', { className: 'pane', 'data-pane': 'body' },
         h('textarea', { id: 'body', rows: 8, spellcheck: false, placeholder: '{\n  "name": "Ada"\n}', oninput: onFieldChange }),

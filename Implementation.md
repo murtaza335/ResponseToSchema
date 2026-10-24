@@ -12,6 +12,8 @@ src/
     naming.ts           PascalCase, singularize, root name from URL, safe keys
     curl.ts             Shell tokenizer + cURL flag parser -> RequestSpec
     env.ts              .env parser and {{VAR}} substitution
+    redact.ts           Strips literal secrets (headers, auth, URL query, JSON/form body) before history is saved
+    imports.ts          Where a new top-level import belongs in a file (after imports/directives)
   config.ts             Settings -> GenerateOptions / PanelOptions
   http.ts               Env resolution, auth, fetch with timeout/cancel, error mapping
   history.ts            Per-workspace history with secret redaction
@@ -24,6 +26,8 @@ test/
   generate.test.ts      Engine behaviour
   roundtrip.test.ts     Generated Zod (v4 + v3) parses each fixture; generated TS typechecks against it
   curl-env.test.ts      cURL and .env parsing
+  redact.test.ts        History redaction
+  imports.test.ts       Import insertion point
   host-smoke.js         Bundled extension against a mocked `vscode` + local HTTP server
 ```
 
@@ -64,7 +68,8 @@ JSON text ─ JSON.parse ─▶ inferType([value]) ─▶ TypeNode tree
 - All network I/O happens in the extension host (`http.ts`). The webview only collects form state and renders results, so it is never subject to webview CORS.
 - `{{VAR}}` tokens are resolved from the env file of the active file's workspace folder. Unresolved tokens abort the send with a message naming them.
 - After a response, the host keeps the parsed value. Changing panel options posts `regenerate`, which re-runs generation without refetching.
-- History is stored in `workspaceState`. Literal secrets in auth fields and sensitive headers are blanked before storage; `{{VAR}}` placeholders are kept.
+- History is stored in `workspaceState`. `core/redact.ts` blanks literal secrets (auth fields, sensitive headers, URL query/userinfo, JSON and form body fields) before storage; `{{VAR}}` placeholders are kept. Other body formats are stored as typed.
+- Every webview message goes through `safeHandle`, so a throwing handler posts an `error` message instead of leaving the UI on "Sending…".
 
 ## 4. Maintenance rules
 

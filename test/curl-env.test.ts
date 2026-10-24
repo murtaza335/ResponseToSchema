@@ -7,6 +7,12 @@ test('tokenizer handles quotes, escapes and line continuations', () => {
   assert.deepEqual(tokenize(`curl 'a b' "c \\"d\\"" e\\ f \\\n  $'g\\nh'`), ['curl', 'a b', 'c "d"', 'e f', 'g\nh']);
 });
 
+test('decodes the \\x, \\u, \\U and octal escapes Chrome emits in $\'...\' strings', () => {
+  assert.deepEqual(tokenize("$'caf\\u00e9 \\x21 \\101 \\U0001F600 \\ud83d\\ude00 a\\\\b it\\'s \\q'"), ['café ! A 😀 😀 a\\b it\'s q']);
+  assert.equal(parseCurl("curl https://x.dev --data-raw $'{\"n\":\"\\u00e9\\n\"}'").body, '{"n":"é\n"}');
+  assert.throws(() => tokenize("curl $'abc"), /Unterminated/);
+});
+
 test('parses a Chrome "Copy as cURL (bash)" command', () => {
   const spec = parseCurl(`curl 'https://api.example.com/v1/users?page=2' \\
   -H 'accept: application/json' \\
