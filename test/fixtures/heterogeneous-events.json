@@ -1,0 +1,1 @@
+[{"type":"click","x":10,"y":20.5,"target":{"id":"btn"}},{"type":"scroll","delta":-3},{"type":"key","key":"Enter","modifiers":["shift"]},{"type":"click","x":1,"y":2,"target":null},null]

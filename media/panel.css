@@ -1,0 +1,193 @@
+:root {
+  --gap: 10px;
+  --radius: 4px;
+  --border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+  --muted: var(--vscode-descriptionForeground);
+  --mono: var(--vscode-editor-font-family, ui-monospace, monospace);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 16px 20px 40px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+#app { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
+
+input, select, textarea, button { font: inherit; color: inherit; }
+
+input[type='text'], input[type='password'], select, textarea {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--border));
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  min-width: 0;
+}
+select { background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border-color: var(--vscode-dropdown-border, var(--border)); }
+input:focus, select:focus, textarea:focus, button:focus-visible, pre:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+textarea { width: 100%; resize: vertical; font-family: var(--mono); font-size: var(--vscode-editor-font-size, 13px); }
+
+button {
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: var(--radius);
+  padding: 5px 12px;
+  cursor: pointer;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  white-space: nowrap;
+}
+button:hover { background: var(--vscode-button-secondaryHoverBackground); }
+button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+button.primary:hover { background: var(--vscode-button-hoverBackground); }
+button.danger { background: var(--vscode-inputValidation-errorBorder, #be1100); color: #fff; }
+button.ghost { background: transparent; color: var(--vscode-textLink-foreground); padding-left: 0; }
+button.ghost:hover { text-decoration: underline; background: transparent; }
+button.icon { background: transparent; padding: 0 8px; font-size: 16px; color: var(--muted); }
+button.icon:hover { color: var(--vscode-errorForeground); background: transparent; }
+
+a { color: var(--vscode-textLink-foreground); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.bar { display: flex; gap: 6px; }
+.bar #method { font-weight: 600; width: 104px; flex: none; }
+.bar #url { flex: 1; font-family: var(--mono); font-size: 13px; padding: 7px 10px; }
+.bar #send { min-width: 84px; font-weight: 600; }
+
+.subbar { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: -4px; }
+.subbar #history { max-width: 46%; font-size: 12px; padding: 2px 6px; }
+.spacer { flex: 1; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 12px 12px;
+  background: var(--vscode-sideBar-background, transparent);
+}
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 -12px 10px; padding: 0 8px; }
+.tab {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 10px 6px;
+}
+.tab:hover { background: transparent; color: var(--vscode-foreground); }
+.tab.active { color: var(--vscode-foreground); border-bottom-color: var(--vscode-panelTitle-activeBorder, var(--vscode-focusBorder)); }
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+.badge:empty { display: none; }
+
+.pane { display: none; }
+.pane.active { display: block; }
+
+.row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.row.end { justify-content: flex-end; margin: 8px 0 0; }
+.stack { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+
+.kv { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.kv-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 2fr) auto; gap: 6px; align-items: center; }
+.kv-row input[type='text'] { font-family: var(--mono); font-size: 12px; }
+.kv-row.disabled input[type='text'] { opacity: 0.5; }
+
+.options { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 0 8px; }
+.options label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.options input[type='text'] { width: 150px; font-family: var(--mono); }
+.options .check { cursor: pointer; }
+
+.status { display: flex; align-items: center; gap: 12px; min-height: 24px; font-size: 12px; flex-wrap: wrap; }
+.status.error { color: var(--vscode-errorForeground); }
+.pill { padding: 1px 8px; border-radius: 10px; font-weight: 600; font-size: 11px; color: #fff; }
+.pill.ok { background: var(--vscode-testing-iconPassed, #388a34); }
+.pill.bad { background: var(--vscode-testing-iconFailed, #c72e0f); }
+
+.spinner {
+  width: 12px; height: 12px;
+  border: 2px solid var(--muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.code {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: var(--vscode-editor-font-size, 13px);
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+}
+.actions { margin: 10px 0 0; flex-wrap: wrap; }
+
+.tok-keyword { color: var(--vscode-symbolIcon-keywordForeground, #c586c0); }
+.tok-string { color: var(--vscode-debugTokenExpression-string, #ce9178); }
+.tok-number { color: var(--vscode-debugTokenExpression-number, #b5cea8); }
+.tok-type { color: var(--vscode-symbolIcon-typeParameterForeground, #4ec9b0); }
+.tok-name { color: var(--vscode-symbolIcon-classForeground, #4ec9b0); }
+.tok-zod { color: var(--vscode-symbolIcon-variableForeground, #9cdcfe); }
+.tok-key { color: var(--vscode-symbolIcon-propertyForeground, #9cdcfe); }
+.tok-comment { color: var(--vscode-descriptionForeground); font-style: italic; }
+
+.empty { padding: 16px 4px 8px; color: var(--muted); }
+.empty h2 { font-size: 15px; font-weight: 600; margin: 0 0 6px; color: var(--vscode-foreground); }
+.empty p { margin: 0 0 8px; max-width: 640px; line-height: 1.5; }
+.empty ul { margin: 0; padding-left: 18px; line-height: 1.7; }
+
+table.headers { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 12px; }
+table.headers th, table.headers td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: top; word-break: break-all; }
+table.headers th { color: var(--muted); font-weight: normal; width: 30%; }
+
+.toast {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translate(-50%, 20px);
+  opacity: 0;
+  pointer-events: none;
+  max-width: min(640px, 90vw);
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  background: var(--vscode-notifications-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-notifications-foreground, var(--vscode-foreground));
+  border: 1px solid var(--vscode-notifications-border, var(--border));
+  box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
+  transition: opacity 0.15s, transform 0.15s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.error { border-color: var(--vscode-inputValidation-errorBorder, #be1100); }
+
+[hidden] { display: none !important; }
+
+@media (max-width: 560px) {
+  body { padding: 12px; }
+  .bar { flex-wrap: wrap; }
+  .bar #url { flex-basis: 100%; order: 3; }
+  .kv-row { grid-template-columns: auto 1fr auto; }
+  .kv-row input[type='text']:nth-of-type(2) { grid-column: 2 / 4; }
+}

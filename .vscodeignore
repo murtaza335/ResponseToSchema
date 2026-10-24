@@ -1,0 +1,9 @@
+**
+!dist/extension.js
+!media/icon.png
+!media/panel.css
+!media/panel.js
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE

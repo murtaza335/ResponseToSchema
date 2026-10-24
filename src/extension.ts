@@ -1,96 +1,100 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
-import { ApiSchemaArchitectPanel, ExecuteRequestPayload, WebviewToHostMessage } from './webviewProvider';
-import { resolveEnvTokens } from './envResolver';
-import { jsonToTypeScript, jsonToZod } from './transformerEngine';
+import { isCurlCommand, parseCurl } from './core/curl';
+import { generateFromJson } from './core/generate';
+import { toPascalCase } from './core/naming';
+import { OutputMode, generateOptions, getConfig } from './config';
+import { RequestHistory } from './history';
+import { insertIntoEditor, openInEditor, pickOutput, trackActiveEditor } from './output';
+import { SchemaPanel } from './panel';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const disposable = vscode.commands.registerCommand('api-schema-architect.openDashboard', () => {
-    const panel = ApiSchemaArchitectPanel.createOrShow(context.extensionUri, (message: WebviewToHostMessage) => {
-      void handleWebviewMessage(message, panel);
-    });
+  const history = new RequestHistory(context.workspaceState);
+  trackActiveEditor(context);
+
+  const register = (id: string, run: (...args: never[]) => unknown): void => {
+    context.subscriptions.push(vscode.commands.registerCommand(`responseToSchema.${id}`, run));
+  };
+
+  register('openPanel', () => SchemaPanel.show(context, history));
+
+  register('importCurl', async () => {
+    const clip = (await vscode.env.clipboard.readText()).trim();
+    const text = isCurlCommand(clip)
+      ? clip
+      : await vscode.window.showInputBox({ prompt: 'Paste a cURL command', placeHolder: "curl 'https://api.example.com/users' -H 'Accept: application/json'" });
+    if (!text) return;
+    try {
+      const request = parseCurl(text);
+      SchemaPanel.show(context, history).loadRequest(request);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`ResponseToSchema: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
-  context.subscriptions.push(disposable);
+  register('generateFromSelection', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+    const text = editor.selection.isEmpty ? editor.document.getText() : editor.document.getText(editor.selection);
+    const fallbackName = editor.document.isUntitled ? 'Root' : path.parse(editor.document.fileName).name;
+    await generateAndOpen(text, fallbackName);
+  });
+
+  register('generateFromFile', async (uri?: vscode.Uri) => {
+    const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+    if (!target) return;
+    const text = Buffer.from(await vscode.workspace.fs.readFile(target)).toString('utf8');
+    await generateAndOpen(text, path.parse(target.fsPath).name);
+  });
+
+  register('pasteJsonAsCode', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      void vscode.window.showWarningMessage('ResponseToSchema: open a file to paste into.');
+      return;
+    }
+    const code = await generateFromText(await vscode.env.clipboard.readText(), 'Root');
+    if (code) await insertIntoEditor(code, editor);
+  });
+
+  register('clearHistory', async () => {
+    await history.clear();
+    void vscode.window.showInformationMessage('ResponseToSchema: request history cleared.');
+  });
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer(SchemaPanel.viewType, {
+      deserializeWebviewPanel: async (panel) => SchemaPanel.revive(panel, context, history),
+    })
+  );
 }
 
 export function deactivate(): void {
-  // No explicit teardown is required; VS Code disposes registered
-  // subscriptions (including the panel's message listener) automatically.
+  // Everything is registered on context.subscriptions.
 }
 
-async function handleWebviewMessage(message: WebviewToHostMessage, panel: ApiSchemaArchitectPanel): Promise<void> {
-  if (message.type === 'executeRequest') {
-    await executeRequest(message.payload, panel);
-  }
+async function generateAndOpen(text: string, fallbackName: string): Promise<void> {
+  const code = await generateFromText(text, fallbackName);
+  if (code) await openInEditor(code);
 }
 
-/**
- * Runs entirely in the Extension Host so it is not subject to the Webview's
- * CORS/sandbox restrictions. Resolves `{{VAR}}` tokens against the workspace
- * `.env` file, performs the HTTP call, and — on success — pipes the raw JSON
- * body into the transformer engine and opens the generated code beside the
- * panel.
- */
-async function executeRequest(payload: ExecuteRequestPayload, panel: ApiSchemaArchitectPanel): Promise<void> {
+/** Validates JSON, asks for the root type name, and returns code in the configured output mode. */
+async function generateFromText(text: string, fallbackName: string): Promise<string | undefined> {
+  const trimmed = text.trim();
   try {
-    const resolvedUrl = await resolveEnvTokens(payload.url);
-
-    if (!resolvedUrl || resolvedUrl.trim().length === 0) {
-      throw new Error('Request URL is empty.');
-    }
-
-    const resolvedHeaders: Record<string, string> = {};
-    for (const [key, value] of Object.entries(payload.headers)) {
-      resolvedHeaders[key] = await resolveEnvTokens(value);
-    }
-
-    const requestInit: RequestInit = {
-      method: payload.method,
-      headers: resolvedHeaders,
-    };
-
-    if (payload.method !== 'GET' && payload.body && payload.body.trim().length > 0) {
-      requestInit.body = await resolveEnvTokens(payload.body);
-    }
-
-    const response = await fetch(resolvedUrl, requestInit);
-    const rawText = await response.text();
-
-    if (!response.ok) {
-      panel.postMessage({ type: 'requestError', error: `HTTP ${response.status} ${response.statusText}` });
-      void vscode.window.showWarningMessage(
-        `API Schema Architect: request completed with HTTP ${response.status}. Attempting to generate types from the response body anyway.`
-      );
-    } else {
-      panel.postMessage({ type: 'requestSuccess', status: response.status });
-    }
-
-    await openGeneratedCode(rawText);
+    JSON.parse(trimmed);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred during the request.';
-    panel.postMessage({ type: 'requestError', error: errorMessage });
-    void vscode.window.showErrorMessage(`API Schema Architect: ${errorMessage}`);
+    void vscode.window.showErrorMessage(`ResponseToSchema: not valid JSON. ${error instanceof Error ? error.message : ''}`);
+    return undefined;
   }
-}
 
-/**
- * Generates the TypeScript interface and Zod schema for the given raw JSON
- * response text, combines them into a single document, and opens it in a
- * new editor tab beside the currently active editor/panel.
- */
-async function openGeneratedCode(rawJson: string): Promise<void> {
-  const tsInterface = jsonToTypeScript(rawJson);
-  const zodSchema = jsonToZod(rawJson);
-
-  const combinedContent = ["import { z } from 'zod';", '', tsInterface.trim(), '', zodSchema.trim(), ''].join('\n');
-
-  const document = await vscode.workspace.openTextDocument({
-    content: combinedContent,
-    language: 'typescript',
+  const rootName = await vscode.window.showInputBox({
+    prompt: 'Name for the root type',
+    value: toPascalCase(fallbackName) || 'Root',
+    validateInput: (v) => (toPascalCase(v) ? undefined : 'Enter a name containing letters or digits'),
   });
+  if (rootName === undefined) return undefined;
 
-  await vscode.window.showTextDocument(document, {
-    viewColumn: vscode.ViewColumn.Beside,
-    preview: false,
-  });
+  const result = generateFromJson(trimmed, generateOptions({ rootName }));
+  return pickOutput(result, getConfig().get<OutputMode>('outputMode', 'combined'));
 }

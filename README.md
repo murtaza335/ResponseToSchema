@@ -1,61 +1,123 @@
-# API Schema Architect
+# ResponseToSchema: API → Zod & TypeScript
 
-A VS Code extension that fires real HTTP requests from a Webview panel and
-instantly generates a matching TypeScript interface + Zod schema from the
-JSON response, opened side-by-side in a new editor tab.
+**Hit an endpoint, get types.** Send a real HTTP request from inside VS Code and instantly get a TypeScript interface **and** a matching Zod schema generated from the JSON response, with no copy-pasting between Postman, a converter website and your editor.
 
-## Getting started
+![ResponseToSchema request panel](media/screenshot.png)
 
-```bash
-npm install --save-dev @types/vscode @types/node typescript
-npm install zod   # runtime dependency used only by the *generated* code
-npm run compile
+## Why
+
+Typing API responses by hand is slow and drifts out of date. The usual workflow is three tools: an HTTP client to call the API, a website to convert JSON to types, and your editor. ResponseToSchema does all of it in one panel, locally:
+
+- **Request → types in one click.** Method, URL, headers, auth and body, then Send. The response becomes `interface User` + `UserSchema` on the spot.
+- **Paste a cURL, get everything.** Paste a "Copy as cURL" command from browser dev tools or API docs into the URL bar. Headers, body, method and auth are filled in for you.
+- **Correct Zod 4 (and Zod 3).** Emits modern Zod 4 APIs (`z.email()`, `z.iso.datetime()`, `z.uuid()`), or Zod 3 syntax if your project hasn't upgraded.
+- **Real inference, not first-element guessing.** Every array element is merged: keys missing from some items become optional (`?` / `.optional()`), `null` becomes `| null` / `.nullable()`, and mixed types become unions.
+- **Readable output.** Nested objects are hoisted into named types (`Address`, `OrderItem`), and identical shapes are de-duplicated. Root names come from the URL (`/v1/users/42` → `User`).
+- **Typed fetch helper.** Optionally generate a `fetchUsers()` function that calls the endpoint and validates the response with the schema.
+- **Secrets stay put.** `{{API_KEY}}` placeholders are resolved from your workspace `.env`. Literal tokens are never written to request history. Nothing leaves your machine except the request you send.
+
+## Features
+
+### Request panel
+`ResponseToSchema: Open Request Panel` from the Command Palette.
+
+| | |
+|---|---|
+| Methods | GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS |
+| Auth | Bearer token, Basic auth (UTF-8 safe) |
+| Variables | `{{NAME}}` in URL, headers, auth and body, from `.env` (configurable). Unresolved variables are reported before sending. |
+| cURL import | `-X`, `-H`, `-d`/`--data-*`, `--json`, `-u`, `-b`, `-A`, `-G`, `--url`, line continuations, `$'…'` strings |
+| Response | Status, time, size, pretty-printed body, response headers |
+| Output | Zod + TypeScript, Zod only (with `z.infer` types), or TypeScript only; named or inline; Zod 4 or 3 |
+| Actions | Insert at cursor, Copy, Open in editor, Save as file |
+| History | Last 50 requests per workspace, secrets redacted |
+
+Shortcut: **Ctrl/Cmd + Enter** sends the request.
+
+### No API call needed
+- **Paste JSON as Zod & TypeScript:** in a `.ts` file, run the command (or use the right-click menu) and the clipboard JSON is converted at your cursor. If the file already imports `zod`, the import isn't duplicated.
+- **Generate from JSON selection / file:** right-click a JSON selection, a `.json` editor, or a `.json` file in the Explorer.
+- **Use clipboard JSON** in the request panel.
+
+### Example
+
+```json
+{ "data": [ { "id": "9b2f…", "email": "ada@example.com", "profile": null },
+            { "id": "1c2f…", "email": "bob@example.org", "profile": { "bio": "hi" }, "nickname": "bobby" } ] }
 ```
 
-Press `F5` in VS Code (with this folder open as the extension project) to
-launch an Extension Development Host, then run the command
-**"API Schema Architect: Open Dashboard"** from the Command Palette.
+becomes
 
-## Architecture
+```ts
+export interface Profile { bio: string; }
 
-- **`src/extension.ts`** — activation, command registration, and the
-  Extension Host side of the IPC bridge. All `fetch` calls happen here, not
-  in the Webview, so they are never subject to the Webview's CORS/sandbox
-  restrictions.
-- **`src/webviewProvider.ts`** — owns the `WebviewPanel` and its raw
-  HTML/CSS/JS shell (method select, URL field, dynamic header grid, body
-  textarea). The Webview only collects form state and calls
-  `acquireVsCodeApi().postMessage(...)`; it never performs the request
-  itself.
-- **`src/envResolver.ts`** — scans `.env` at the first workspace folder root
-  and substitutes `{{VAR_NAME}}` tokens in the URL, headers, and body before
-  the request is dispatched.
-- **`src/transformerEngine.ts`** — pure functions `jsonToTypeScript` and
-  `jsonToZod` that recursively walk a parsed JSON value and emit a
-  `RootResponse` interface / `RootResponseSchema` Zod schema, with
-  `.nullable()` / `string | null` applied per the deterministic null rule and
-  a `WeakSet`-based cycle guard so unmappable circular structures fail
-  cleanly instead of hanging.
+export interface User {
+  id: string;
+  email: string;
+  profile: Profile | null;
+  nickname?: string;
+}
 
-## Design decisions worth knowing about
+export interface Users { data: User[]; }
 
-- **No `quicktype-core` dependency.** `quicktype-core` is a large dependency
-  chain (its own CLI assumptions, language-target abstractions, IO shims)
-  that is awkward to bundle cleanly inside a VS Code extension host and would
-  add real weight and version-compatibility risk for a feature this scoped.
-  `transformerEngine.ts` implements the same JSON → types walk directly with
-  plain recursion, which keeps the TypeScript and Zod outputs trivially kept
-  in sync (same traversal, same key order, same depth) and has zero runtime
-  dependencies of its own. Swapping in `quicktype-core` later is a contained
-  change limited to this one file.
-- **Inlined nested types, not separate named interfaces.** Nested objects are
-  emitted as inline object literals / inline `z.object({...})` at the correct
-  indentation depth rather than hoisted into separately named
-  `interface Foo123 { ... }` declarations. This avoids any name-collision
-  bookkeeping for repeated key names at different depths and matches the
-  spec's requirement of a single `RootResponse` top-level name.
-- **Bundling for production.** The `main` field points at `./dist/extension.js`.
-  For a real publish you'll want to add `esbuild` or `webpack` to bundle
-  `src/` into a single `dist/extension.js`; `tsc` alone (as wired in
-  `package.json` for now) emits one JS file per TS file into `dist/`, which
-  works fine for local development (`F5`) but isn't a packaging setup.
+export const ProfileSchema = z.object({ bio: z.string() });
+
+export const UserSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+  profile: ProfileSchema.nullable(),
+  nickname: z.string().optional(),
+});
+
+export const UsersSchema = z.object({ data: z.array(UserSchema) });
+```
+
+## Settings
+
+| Setting | Default | |
+|---|---|---|
+| `responseToSchema.outputMode` | `combined` | `combined`, `zod`, or `typescript` |
+| `responseToSchema.zodVersion` | `4` | `4` or `3` |
+| `responseToSchema.typeStyle` | `named` | `named` hoists nested objects; `inline` keeps one declaration |
+| `responseToSchema.detectFormats` | `true` | ISO datetime/date, email, UUID, URL validators |
+| `responseToSchema.detectIntegers` | `false` | `z.number().int()` when all samples are whole numbers |
+| `responseToSchema.includeFetcher` | `false` | Append a typed, validating `fetchX()` helper |
+| `responseToSchema.indentation` | `2` | `2`, `4`, or `tab` |
+| `responseToSchema.envFile` | `.env` | Variables file, relative to the workspace folder |
+| `responseToSchema.requestTimeoutSeconds` | `30` | |
+| `responseToSchema.arraySampleLimit` | `1000` | Max array elements inspected (0 = all) |
+| `responseToSchema.history.maxEntries` | `50` | 0 disables history |
+
+## How inference works
+
+- Formats are only applied when **every** sample matches, so a field that is sometimes `""` stays `z.string()`.
+- Integers are opt-in, because one sample can't tell `10` from `10.5`.
+- Empty arrays become `unknown[]`. Empty objects become `Record<string, unknown>` / `z.record(z.string(), z.unknown())`.
+- Keys that aren't valid identifiers are quoted (`"Content-Type": string`).
+
+Every release is tested by running the generated schemas against their source JSON with real Zod 4 and Zod 3, and typechecking the generated TypeScript against that JSON.
+
+## Privacy
+
+Requests are sent from the VS Code extension host directly to the URL you enter. There is no telemetry and no account, and there are no third-party servers. Request history lives in VS Code workspace storage; auth tokens, passwords and sensitive headers (`Authorization`, `Cookie`, `*token*`, `*api-key*`, …) are blanked unless they are `{{VARIABLE}}` placeholders.
+
+## Known limitations
+
+- Requests use Node's `fetch`, so VS Code's `http.proxy` setting and self-signed certificates may not be honored on older VS Code versions.
+- `multipart/form-data` bodies and file uploads aren't supported yet.
+- Discriminated unions (e.g. events keyed by `type`) are merged into one object with optional fields.
+
+## Contributing
+
+```bash
+npm install
+npm run check        # typecheck + unit/round-trip tests + extension host smoke test
+npm run watch        # then press F5 to launch an Extension Development Host
+npm run package      # builds response-to-schema-<version>.vsix
+```
+
+Issues and PRs welcome at [github.com/murtaza335/ResponseToSchema](https://github.com/murtaza335/ResponseToSchema).
+
+## License
+
+MIT

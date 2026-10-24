@@ -1,38 +1,234 @@
 {
-  "name": "api-schema-architect",
-  "displayName": "API Schema Architect",
-  "description": "Fire real HTTP requests from a Webview panel and instantly generate TypeScript interfaces and Zod schemas from the JSON response.",
-  "version": "0.1.0",
-  "publisher": "local-dev",
+  "name": "response-to-schema",
+  "displayName": "ResponseToSchema: API → Zod & TypeScript",
+  "description": "Send a real HTTP request (or paste a cURL / JSON) and get a TypeScript interface plus a matching Zod schema instantly. Zod 4 & 3, .env variables, typed fetch helper.",
+  "version": "1.0.0",
+  "publisher": "murtaza335",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1e1b4b",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/murtaza335/ResponseToSchema.git"
+  },
+  "bugs": {
+    "url": "https://github.com/murtaza335/ResponseToSchema/issues"
+  },
+  "homepage": "https://github.com/murtaza335/ResponseToSchema#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Programming Languages",
+    "Snippets",
     "Other"
   ],
+  "keywords": [
+    "zod",
+    "typescript",
+    "json to zod",
+    "json to typescript",
+    "api",
+    "rest",
+    "http client",
+    "curl",
+    "schema",
+    "types",
+    "interface",
+    "codegen",
+    "validation",
+    "postman",
+    "thunder client",
+    "quicktype",
+    "fetch",
+    "openapi"
+  ],
   "activationEvents": [
-    "onCommand:api-schema-architect.openDashboard"
+    "onWebviewPanel:responseToSchema.panel"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "api-schema-architect.openDashboard",
-        "title": "API Schema Architect: Open Dashboard"
+        "command": "responseToSchema.openPanel",
+        "title": "Open Request Panel",
+        "category": "ResponseToSchema",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "responseToSchema.importCurl",
+        "title": "Import cURL Command",
+        "category": "ResponseToSchema"
+      },
+      {
+        "command": "responseToSchema.generateFromSelection",
+        "title": "Generate Zod & TypeScript from JSON",
+        "category": "ResponseToSchema"
+      },
+      {
+        "command": "responseToSchema.generateFromFile",
+        "title": "Generate Zod & TypeScript from JSON File",
+        "category": "ResponseToSchema"
+      },
+      {
+        "command": "responseToSchema.pasteJsonAsCode",
+        "title": "Paste JSON as Zod & TypeScript",
+        "category": "ResponseToSchema"
+      },
+      {
+        "command": "responseToSchema.clearHistory",
+        "title": "Clear Request History",
+        "category": "ResponseToSchema"
       }
-    ]
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "responseToSchema.generateFromSelection",
+          "when": "editorLangId =~ /^jsonc?$/ || editorHasSelection",
+          "group": "responseToSchema@1"
+        },
+        {
+          "command": "responseToSchema.pasteJsonAsCode",
+          "when": "editorLangId =~ /^(typescript|typescriptreact|javascript|javascriptreact)$/",
+          "group": "responseToSchema@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "responseToSchema.generateFromFile",
+          "when": "resourceExtname == .json",
+          "group": "responseToSchema@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "responseToSchema.generateFromFile",
+          "when": "resourceExtname == .json"
+        },
+        {
+          "command": "responseToSchema.generateFromSelection",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "responseToSchema.pasteJsonAsCode",
+          "when": "editorIsOpen"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ResponseToSchema",
+      "properties": {
+        "responseToSchema.outputMode": {
+          "type": "string",
+          "enum": [
+            "combined",
+            "zod",
+            "typescript"
+          ],
+          "enumDescriptions": [
+            "TypeScript interfaces and Zod schemas in one file",
+            "Zod schemas with z.infer type aliases",
+            "TypeScript interfaces only"
+          ],
+          "default": "combined",
+          "description": "What to generate."
+        },
+        "responseToSchema.zodVersion": {
+          "type": "string",
+          "enum": [
+            "4",
+            "3"
+          ],
+          "default": "4",
+          "description": "Zod API to target. Zod 4 uses top-level formats like z.email(); Zod 3 uses z.string().email()."
+        },
+        "responseToSchema.typeStyle": {
+          "type": "string",
+          "enum": [
+            "named",
+            "inline"
+          ],
+          "enumDescriptions": [
+            "Hoist every nested object into its own named interface/schema",
+            "Inline nested objects inside the root type"
+          ],
+          "default": "named",
+          "description": "How nested objects are declared."
+        },
+        "responseToSchema.detectFormats": {
+          "type": "boolean",
+          "default": true,
+          "description": "Detect ISO datetimes, dates, emails, UUIDs and URLs and emit the matching Zod validators."
+        },
+        "responseToSchema.detectIntegers": {
+          "type": "boolean",
+          "default": false,
+          "description": "Emit z.number().int() when every sample is a whole number. Off by default because a single sample can't tell 10 from 10.5."
+        },
+        "responseToSchema.includeFetcher": {
+          "type": "boolean",
+          "default": false,
+          "description": "Append a typed fetch function that validates the response with the generated schema (request panel only)."
+        },
+        "responseToSchema.indentation": {
+          "type": "string",
+          "enum": [
+            "2",
+            "4",
+            "tab"
+          ],
+          "default": "2",
+          "description": "Indentation of generated code."
+        },
+        "responseToSchema.arraySampleLimit": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "description": "Maximum array elements inspected when merging element shapes (0 = all)."
+        },
+        "responseToSchema.envFile": {
+          "type": "string",
+          "default": ".env",
+          "description": "Path, relative to the workspace folder, of the file that provides {{VARIABLE}} values."
+        },
+        "responseToSchema.requestTimeoutSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "description": "Abort requests that take longer than this."
+        },
+        "responseToSchema.history.maxEntries": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "description": "Requests remembered per workspace (0 disables history). Literal secrets in auth and sensitive headers are never stored."
+        }
+      }
+    }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "vscode:prepublish": "npm run build -- --production",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "tsc -p tsconfig.test.json && node --test \"out/test/*.test.js\"",
+    "check": "npm run typecheck && npm test && npm run test:host",
+    "package": "vsce package --no-dependencies",
+    "publish:marketplace": "vsce publish --no-dependencies",
+    "publish:openvsx": "ovsx publish --no-dependencies",
+    "test:host": "npm run build && node test/host-smoke.js"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
-    "@types/vscode": "^1.125.0",
-    "typescript": "^5.9.3"
-  },
-  "dependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "ovsx": "^1.3.0",
+    "typescript": "^5.9.3",
     "zod": "^4.4.3"
   }
 }

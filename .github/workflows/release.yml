@@ -1,0 +1,38 @@
+name: Release
+
+# Push a tag like v1.0.1 (matching package.json "version") to publish to the
+# VS Code Marketplace and Open VSX and attach the .vsix to a GitHub release.
+# Requires repository secrets VSCE_PAT and OVSX_PAT.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Verify tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - run: npm run package
+      - name: Publish to VS Code Marketplace
+        run: npx vsce publish --no-dependencies --packagePath *.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      - name: Publish to Open VSX
+        run: npx ovsx publish *.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.vsix'
+          generate_release_notes: true

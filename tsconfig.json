@@ -1,14 +1,16 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "target": "ES2020",
-    "outDir": "dist",
-    "lib": ["ES2020"],
-    "sourceMap": true,
-    "rootDir": "src",
+    "target": "ES2022",
+    "lib": ["ES2022"],
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "rootDir": "src",
+    "outDir": "dist"
   },
-  "exclude": ["node_modules", ".vscode-test"]
+  "include": ["src/**/*.ts"]
 }
